@@ -1,9 +1,9 @@
 // =============================================
-// APP.JS - LOGICA PRINCIPALE
+// APP.JS - LOGICA PRINCIPALE PER GARE
 // =============================================
 
-let allEvents = [];
-let filteredEvents = [];
+let allRaces = [];
+let filteredRaces = [];
 let autoRefreshTimer = null;
 
 // =============================================
@@ -12,11 +12,11 @@ let autoRefreshTimer = null;
 
 document.addEventListener('DOMContentLoaded', function() {
     initEventListeners();
-    loadEvents();
+    loadRaces();
     
     // Auto-refresh se configurato
     if (CONFIG.autoRefreshInterval > 0) {
-        autoRefreshTimer = setInterval(loadEvents, CONFIG.autoRefreshInterval);
+        autoRefreshTimer = setInterval(loadRaces, CONFIG.autoRefreshInterval);
     }
 });
 
@@ -30,16 +30,16 @@ function initEventListeners() {
     const refreshBtn = document.getElementById('refreshBtn');
     const closeErrorBtn = document.getElementById('closeErrorBtn');
 
-    if (searchInput) searchInput.addEventListener('input', filterAndDisplayEvents);
-    if (filterSelect) filterSelect.addEventListener('change', filterAndDisplayEvents);
-    if (refreshBtn) refreshBtn.addEventListener('click', loadEvents);
+    if (searchInput) searchInput.addEventListener('input', filterAndDisplayRaces);
+    if (filterSelect) filterSelect.addEventListener('change', filterAndDisplayRaces);
+    if (refreshBtn) refreshBtn.addEventListener('click', loadRaces);
     if (closeErrorBtn) closeErrorBtn.addEventListener('click', hideError);
 
     // Enter per ricerca
     if (searchInput) {
         searchInput.addEventListener('keypress', function(e) {
             if (e.key === 'Enter') {
-                filterAndDisplayEvents();
+                filterAndDisplayRaces();
             }
         });
     }
@@ -49,7 +49,7 @@ function initEventListeners() {
 // CARICAMENTO DATI
 // =============================================
 
-async function loadEvents() {
+async function loadRaces() {
     try {
         showLoading();
         const response = await fetch(getGoogleSheetsUrl());
@@ -60,28 +60,42 @@ async function loadEvents() {
 
         const data = await response.json();
         
-        if (!data.values || data.values.length < 2) {
+        // Gestisci formato Google Visualization API
+        let rows = [];
+        if (data.table && data.table.rows) {
+            // Formato gviz
+            const headers = data.table.cols.map(col => col.label);
+            rows = [headers];
+            data.table.rows.forEach(row => {
+                rows.push(row.c.map(cell => cell ? cell.v : ''));
+            });
+        } else if (data.values) {
+            // Formato Sheets API
+            rows = data.values;
+        }
+        
+        if (!rows || rows.length < 2) {
             showError('Nessun dato trovato nel foglio Google Sheet');
             displayEmpty();
             return;
         }
 
         // Parsifica i dati
-        allEvents = parseSheetData(data.values);
+        allRaces = parseSheetData(rows);
         
-        // Ordina eventi
-        allEvents.sort((a, b) => {
+        // Ordina gare
+        allRaces.sort((a, b) => {
             let compareValue = 0;
             
             switch (CONFIG.sortBy) {
-                case 'data':
-                    compareValue = new Date(a.dataObj) - new Date(b.dataObj);
+                case 'start_date':
+                    compareValue = new Date(a.start_date_obj) - new Date(b.start_date_obj);
                     break;
-                case 'nome':
-                    compareValue = a.nome.localeCompare(b.nome);
+                case 'name':
+                    compareValue = a.name.localeCompare(b.name);
                     break;
-                case 'stato':
-                    compareValue = a.stato.localeCompare(b.stato);
+                case 'status':
+                    compareValue = a.status.localeCompare(b.status);
                     break;
             }
             
@@ -89,7 +103,7 @@ async function loadEvents() {
         });
 
         // Filtra e visualizza
-        filterAndDisplayEvents();
+        filterAndDisplayRaces();
         updateLastUpdate();
         hideError();
 
@@ -105,42 +119,49 @@ async function loadEvents() {
 // =============================================
 
 function parseSheetData(rows) {
-    const headers = rows[0].map(h => h.trim());
-    const events = [];
+    const headers = rows[0].map(h => String(h).trim());
+    const races = [];
 
     // Trova indici colonne
-    const nameIndex = headers.findIndex(h => h === COLUMN_CONFIG.nome);
-    const dataIndex = headers.findIndex(h => h === COLUMN_CONFIG.data);
-    const oraIndex = headers.findIndex(h => h === COLUMN_CONFIG.ora);
-    const luogoIndex = headers.findIndex(h => h === COLUMN_CONFIG.luogo);
-    const descrizioneIndex = headers.findIndex(h => h === COLUMN_CONFIG.descrizione);
-    const statoIndex = headers.findIndex(h => h === COLUMN_CONFIG.stato);
-    const partecipantiIndex = headers.findIndex(h => h === COLUMN_CONFIG.partecipanti);
-    const linkIndex = headers.findIndex(h => h === COLUMN_CONFIG.link);
+    const indices = {};
+    for (const [key, colName] of Object.entries(COLUMN_CONFIG)) {
+        indices[key] = headers.findIndex(h => h === colName);
+    }
 
     // Processa righe dati
     for (let i = 1; i < rows.length; i++) {
         const row = rows[i];
         
         // Salta righe vuote
-        if (!row || row.length === 0 || !row[nameIndex]) continue;
+        if (!row || row.length === 0 || !row[indices.name]) continue;
 
-        const event = {
-            nome: row[nameIndex]?.trim() || 'N/A',
-            data: row[dataIndex]?.trim() || 'N/A',
-            dataObj: parseDate(row[dataIndex]?.trim()),
-            ora: row[oraIndex]?.trim() || 'N/A',
-            luogo: row[luogoIndex]?.trim() || 'N/A',
-            descrizione: row[descrizioneIndex]?.trim() || '',
-            stato: row[statoIndex]?.trim() || 'Programmato',
-            partecipanti: row[partecipantiIndex]?.trim() || '',
-            link: row[linkIndex]?.trim() || ''
+        const race = {
+            championship_id: row[indices.championship_id]?.toString().trim() || '',
+            name: row[indices.name]?.toString().trim() || 'N/A',
+            start_date: row[indices.start_date]?.toString().trim() || 'N/A',
+            start_date_obj: parseDate(row[indices.start_date]?.toString().trim()),
+            end_date: row[indices.end_date]?.toString().trim() || '',
+            status: row[indices.status]?.toString().trim() || 'upcoming',
+            capacity: parseInt(row[indices.capacity]) || 0,
+            spots_taken: parseInt(row[indices.spots_taken]) || 0,
+            entry_fee_required: row[indices.entry_fee_required]?.toString().toLowerCase() === 'true',
+            accepting_registrations: row[indices.accepting_registrations]?.toString().toLowerCase() === 'true',
+            game_name: row[indices.game_name]?.toString().trim() || '',
+            host_name: row[indices.host_name]?.toString().trim() || '',
+            round_number: row[indices.round_number]?.toString().trim() || '',
+            upcoming_race_id: row[indices.upcoming_race_id]?.toString().trim() || '',
+            upcoming_race_name: row[indices.upcoming_race_name]?.toString().trim() || '',
+            upcoming_track_name: row[indices.upcoming_track_name]?.toString().trim() || '',
+            upcoming_track_photo: row[indices.upcoming_track_photo]?.toString().trim() || '',
+            upcoming_starts_at: row[indices.upcoming_starts_at]?.toString().trim() || '',
+            url: row[indices.url]?.toString().trim() || '',
+            image: row[indices.image]?.toString().trim() || ''
         };
 
-        events.push(event);
+        races.push(race);
     }
 
-    return events;
+    return races;
 }
 
 // =============================================
@@ -149,6 +170,8 @@ function parseSheetData(rows) {
 
 function parseDate(dateStr) {
     if (!dateStr) return new Date();
+    
+    dateStr = String(dateStr).trim();
     
     // Prova formato YYYY-MM-DD
     if (dateStr.includes('-')) {
@@ -193,78 +216,115 @@ function formatDate(dateStr) {
 // FILTRI E VISUALIZZAZIONE
 // =============================================
 
-function filterAndDisplayEvents() {
+function filterAndDisplayRaces() {
     const searchInput = document.getElementById('searchInput').value.toLowerCase();
     const filterSelect = document.getElementById('filterSelect').value;
 
-    filteredEvents = allEvents.filter(event => {
+    filteredRaces = allRaces.filter(race => {
         // Filtro ricerca
         const matchesSearch = !searchInput || 
-            event.nome.toLowerCase().includes(searchInput) ||
-            event.luogo.toLowerCase().includes(searchInput) ||
-            event.descrizione.toLowerCase().includes(searchInput);
+            race.name.toLowerCase().includes(searchInput) ||
+            race.game_name.toLowerCase().includes(searchInput) ||
+            race.host_name.toLowerCase().includes(searchInput) ||
+            race.upcoming_track_name.toLowerCase().includes(searchInput);
 
         // Filtro stato
-        const matchesFilter = filterSelect === 'all' || event.stato === filterSelect;
+        const matchesFilter = filterSelect === 'all' || race.status === filterSelect;
 
         return matchesSearch && matchesFilter;
     });
 
-    displayEvents(filteredEvents);
+    displayRaces(filteredRaces);
     updateStatistics();
 }
 
 // =============================================
-// VISUALIZZAZIONE EVENTI
+// VISUALIZZAZIONE GARE
 // =============================================
 
-function displayEvents(events) {
+function displayRaces(races) {
     const container = document.getElementById('eventsContainer');
     
-    if (events.length === 0) {
+    if (races.length === 0) {
         displayEmpty();
         return;
     }
 
-    container.innerHTML = events.map(event => createEventCard(event)).join('');
+    container.innerHTML = races.map(race => createRaceCard(race)).join('');
 }
 
-function createEventCard(event) {
-    const statusConfig = STATUS_CONFIG[event.stato] || STATUS_CONFIG['Programmato'];
-    const dataFormattata = formatDate(event.data);
-
-    const linkHtml = event.link 
-        ? `<a href="${event.link}" target="_blank" class="event-link">🔗 Dettagli</a>` 
+function createRaceCard(race) {
+    const statusConfig = STATUS_CONFIG[race.status] || STATUS_CONFIG['upcoming'];
+    const startDate = formatDate(race.start_date);
+    const endDate = race.end_date ? formatDate(race.end_date) : '';
+    
+    // Calcola posti disponibili
+    const spotsAvailable = race.capacity - race.spots_taken;
+    const percentage = race.capacity > 0 ? Math.round((race.spots_taken / race.capacity) * 100) : 0;
+    
+    // Immagine: usa quella della gara o della pista
+    const imageUrl = race.image || race.upcoming_track_photo;
+    const imageHtml = imageUrl ? `<img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(race.name)}" class="event-image" onerror="this.style.display='none'">` : '';
+    
+    // Accetta iscrizioni
+    const acceptingHtml = race.accepting_registrations 
+        ? `<div class="event-detail accepting">✅ Accetta iscrizioni</div>` 
+        : '';
+    
+    // Quota d'iscrizione
+    const feeHtml = race.entry_fee_required 
+        ? `<div class="event-detail"><strong>💰 Quota:</strong> Richiesta</div>` 
+        : '';
+    
+    // Prossima gara
+    const nextRaceHtml = race.upcoming_race_name
+        ? `
+        <div class="event-detail">
+            <strong>🏎️ Prossima gara:</strong> ${escapeHtml(race.upcoming_race_name)}
+        </div>
+        ${race.upcoming_track_name ? `<div class="event-detail"><strong>🏁 Pista:</strong> ${escapeHtml(race.upcoming_track_name)}</div>` : ''}
+        ${race.upcoming_starts_at ? `<div class="event-detail"><strong>⏰ Partenza:</strong> ${escapeHtml(race.upcoming_starts_at)}</div>` : ''}
+        `
+        : '';
+    
+    const linkHtml = race.url 
+        ? `<a href="${escapeHtml(race.url)}" target="_blank" class="event-link">🔗 Dettagli</a>` 
         : '';
 
     return `
         <div class="event-card">
+            ${imageHtml}
             <div class="event-header">
-                <h2 class="event-title">${escapeHtml(event.nome)}</h2>
+                <div>
+                    <h2 class="event-title">${escapeHtml(race.name)}</h2>
+                    ${race.round_number ? `<p class="event-round">Round ${escapeHtml(race.round_number)}</p>` : ''}
+                </div>
                 <span class="event-status" style="background-color: ${statusConfig.color}20; border: 2px solid ${statusConfig.color}; color: white;">
                     ${statusConfig.icon} ${statusConfig.label}
                 </span>
             </div>
             <div class="event-body">
                 <div class="event-detail">
-                    <strong>📅 Data:</strong> ${dataFormattata}
+                    <strong>🎮 Gioco:</strong> ${escapeHtml(race.game_name)}
                 </div>
                 <div class="event-detail">
-                    <strong>⏰ Ora:</strong> ${escapeHtml(event.ora)}
+                    <strong>👤 Host:</strong> ${escapeHtml(race.host_name)}
                 </div>
                 <div class="event-detail">
-                    <strong>📍 Luogo:</strong> ${escapeHtml(event.luogo)}
+                    <strong>📅 Data inizio:</strong> ${startDate}
                 </div>
-                ${event.descrizione ? `
+                ${endDate ? `<div class="event-detail"><strong>📅 Data fine:</strong> ${endDate}</div>` : ''}
+                
                 <div class="event-detail">
-                    <strong>📝 Descrizione:</strong> ${escapeHtml(event.descrizione)}
+                    <strong>👥 Posti:</strong> ${race.spots_taken}/${race.capacity}
+                    <div class="progress-bar" style="width: ${percentage}%; background: linear-gradient(90deg, #06a77d, #457b9d);">
+                        ${percentage}%
+                    </div>
                 </div>
-                ` : ''}
-                ${event.partecipanti ? `
-                <div class="event-detail">
-                    <strong>👥 Partecipanti:</strong> ${escapeHtml(event.partecipanti)}
-                </div>
-                ` : ''}
+                
+                ${feeHtml}
+                ${acceptingHtml}
+                ${nextRaceHtml}
             </div>
             <div class="event-footer">
                 ${linkHtml}
@@ -280,17 +340,17 @@ function createEventCard(event) {
 function updateStatistics() {
     if (!CONFIG.showStats) return;
 
-    const total = allEvents.length;
-    const programmato = allEvents.filter(e => e.stato === 'Programmato').length;
-    const inCourso = allEvents.filter(e => e.stato === 'In corso').length;
-    const completato = allEvents.filter(e => e.stato === 'Completato').length;
-    const annullato = allEvents.filter(e => e.stato === 'Annullato').length;
+    const total = allRaces.length;
+    const upcoming = allRaces.filter(r => r.status === 'upcoming').length;
+    const active = allRaces.filter(r => r.status === 'active').length;
+    const concluded = allRaces.filter(r => r.status === 'concluded').length;
+    const cancelled = allRaces.filter(r => r.status === 'cancelled').length;
 
     document.getElementById('totalStat').textContent = total;
-    document.getElementById('programmadoStat').textContent = programmato;
-    document.getElementById('inProgressStat').textContent = inCourso;
-    document.getElementById('completedStat').textContent = completato;
-    document.getElementById('cancelledStat').textContent = annullato;
+    document.getElementById('programmadoStat').textContent = upcoming;
+    document.getElementById('inProgressStat').textContent = active;
+    document.getElementById('completedStat').textContent = concluded;
+    document.getElementById('cancelledStat').textContent = cancelled;
 }
 
 // =============================================
@@ -318,7 +378,7 @@ function displayEmpty() {
     container.innerHTML = `
         <div class="empty-state" style="display: flex;">
             <div class="empty-icon">🏁</div>
-            <h2>Nessun evento trovato</h2>
+            <h2>Nessuna gara trovata</h2>
             <p>Prova a modificare i filtri o la ricerca</p>
         </div>
     `;
@@ -329,7 +389,7 @@ function showLoading() {
     container.innerHTML = `
         <div class="loading-spinner">
             <div class="spinner"></div>
-            <p>Caricamento eventi...</p>
+            <p>Caricamento gare...</p>
         </div>
     `;
 }
@@ -355,6 +415,7 @@ function hideError() {
 // =============================================
 
 function escapeHtml(text) {
+    if (!text) return '';
     const map = {
         '&': '&amp;',
         '<': '&lt;',
@@ -362,5 +423,5 @@ function escapeHtml(text) {
         '"': '&quot;',
         "'": '&#039;'
     };
-    return text.replace(/[&<>"']/g, m => map[m]);
+    return String(text).replace(/[&<>"']/g, m => map[m]);
 }
