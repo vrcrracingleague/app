@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="VRC Racing League - Riepilogo Eventi">
+    <meta name="theme-color" content="#e63946">
+    
+    <title>VRC Racing League - Riepilogo Eventi 🏁</title>
+    
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <!-- HEADER -->
+        <header class="header">
+            <h1>🏁 VRC Racing League</h1>
+            <p class="subtitle">Riepilogo Eventi</p>
+        </header>
+
+        <!-- ERROR MESSAGE -->
+        <div id="errorMessage" class="error-message" style="display: none;">
+            <span id="errorText"></span>
+            <span id="closeErrorBtn" class="close-btn">✕</span>
+        </div>
+
+        <!-- CONTROLS -->
+        <div class="controls">
+            <input 
+                type="text" 
+                id="searchInput" 
+                class="search-box" 
+                placeholder="🔍 Cerca per nome evento, luogo..."
+                aria-label="Cerca eventi"
+            >
+            <select id="filterSelect" class="filter-select" aria-label="Filtra per stato">
+                <option value="all">📊 Tutti gli stati</option>
+                <option value="Programmato">📅 Programmato</option>
+                <option value="In corso">🏃 In corso</option>
+                <option value="Completato">✅ Completato</option>
+                <option value="Annullato">❌ Annullato</option>
+            </select>
+            <button id="refreshBtn" class="refresh-btn" aria-label="Aggiorna dati">
+                🔄 Aggiorna Dati
+            </button>
+        </div>
+
+        <!-- STATISTICS -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-number" id="totalStat">0</div>
+                <div class="stat-label">Totale Eventi</div>
+            </div>
+            <div class="stat-card programmed">
+                <div class="stat-number" id="programmadoStat">0</div>
+                <div class="stat-label">Programmati</div>
+            </div>
+            <div class="stat-card in-progress">
+                <div class="stat-number" id="inProgressStat">0</div>
+                <div class="stat-label">In Corso</div>
+            </div>
+            <div class="stat-card completed">
+                <div class="stat-number" id="completedStat">0</div>
+                <div class="stat-label">Completati</div>
+            </div>
+            <div class="stat-card cancelled">
+                <div class="stat-number" id="cancelledStat">0</div>
+                <div class="stat-label">Annullati</div>
+            </div>
+        </div>
+
+        <!-- LAST UPDATE -->
+        <div id="lastUpdate" class="last-update">
+            Ultimo aggiornamento: --:--:--
+        </div>
+
+        <!-- EVENTS CONTAINER -->
+        <div id="eventsContainer" class="events-container">
+            <div class="loading-spinner">
+                <div class="spinner"></div>
+                <p>Caricamento eventi...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- SCRIPT -->
+    <script src="config.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
